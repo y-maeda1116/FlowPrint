@@ -9,7 +9,7 @@
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
     "test": "vitest",
-    "deploy": "npm run build && gh-pages -d dist"
+    "deploy": "npm run build && echo \"Build completed, starting gh-pages...\" && gh-pages -d react-ts-app/dist"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.1.0",
