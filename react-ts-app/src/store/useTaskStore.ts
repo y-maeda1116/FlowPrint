@@ -1,25 +1,30 @@
 // src/store/useTaskStore.ts
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { Task, TaskColumn } from '../types';
-import { v4 as uuidv4 } from 'uuid'; // For template task IDs if needed
+import { Task, TaskColumn, TaskPriority, TaskTemplate, ExportedData, ExportedTask } from '../types'; // 型をインポート
+import { v4 as uuidv4 } from 'uuid';
 
-export interface TaskTemplate { // ★ TaskTemplateインターフェース定義
+// TaskTemplateTaskDefinition と TaskTemplate は既にインポートされているか、ここで定義されているはず
+// If not, they should be imported from types.ts or defined here.
+// Assuming TaskTemplate is already correctly defined/imported as per previous steps.
+
+export interface TaskTemplateTaskDefinition { // Keep if not moved to types.ts
+  title: string;
+  description?: string;
+  estimatedMinutes?: number;
+  priority?: TaskPriority;
+  tags?: string[];
+  children?: TaskTemplateTaskDefinition[];
+}
+export interface TaskTemplate {
   id: string;
   name: string;
-  tasks: Array<{ // Task作成に必要な情報（IDや親子関係、日時は適用時に決定）
-    title: string;
-    description?: string;
-    estimatedMinutes?: number;
-    priority?: 'low' | 'medium' | 'high';
-    tags?: string[];
-    children?: Array<Omit<TaskTemplate['tasks'][0], 'children'>>;
-  }>;
+  tasks: TaskTemplateTaskDefinition[];
 }
 
 interface TaskState {
   tasks: Record<string, Task>;
-  columns: TaskColumn[]; // UI表示用なので永続化しないが、型定義としては必要
+  columns: TaskColumn[];
   rootTaskIds: string[];
   selectedTaskId: string | null;
   editingTaskId: string | null;
@@ -34,23 +39,29 @@ interface TaskState {
   setActiveColumns: (taskIds: string[]) => void;
   setSelectedTaskId: (taskId: string | null) => void;
   setEditingTaskId: (taskId: string | null) => void;
-  taskTemplates: Record<string, TaskTemplate>; // ★ テンプレート保存用
-  addTemplate: (template: TaskTemplate) => void; // ★
-  deleteTemplate: (templateId: string) => void; // ★
-  applyTemplate: (templateId: string, parentId: string | null, startDateTime?: Date) => string[]; // ★
+  taskTemplates: Record<string, TaskTemplate>;
+  addTemplate: (template: TaskTemplate) => void;
+  deleteTemplate: (templateId: string) => void;
+  applyTemplate: (templateId: string, parentId: string | null, startDateTime?: Date) => string[];
+
+  // Selectors (メソッド形式)
+  getCompletedTasksTotalCount: () => number;
+  getTasksCompletedTodayCount: () => number;
+  getTasksCompletedThisWeekCount: () => number;
+  getTasksCompletedThisMonthCount: () => number;
+  importState: (data: ExportedData) => boolean; // ★ アクションの型定義
 }
 
-// 初期状態を定義
 const initialCoreState = {
   tasks: {
-    'task-1': { id: 'task-1', title: '親タスク 1 (サンプル)', description: "これは親タスク1の説明です。", completed: false, parentId: null, childrenIds: ['task-2', 'task-3'], createdAt: new Date(), completedAt: null, tags: [], priority: 'medium' },
-    'task-2': { id: 'task-2', title: '子タスク 1-1 (サンプル)', description: "子タスク1-1の詳細。", completed: false, parentId: 'task-1', childrenIds: [], createdAt: new Date(), completedAt: null, tags: [], priority: 'low' },
-    'task-3': { id: 'task-3', title: '子タスク 1-2 (サンプル)', completed: false, parentId: 'task-1', childrenIds: ['task-4'], createdAt: new Date(), completedAt: null, tags: [], priority: 'high' },
-    'task-4': { id: 'task-4', title: '孫タスク 1-2-1 (サンプル)', completed: true, parentId: 'task-3', childrenIds: [], createdAt: new Date(), completedAt: new Date(), tags: [], priority: 'medium' },
-    'task-5': { id: 'task-5', title: '親タスク 2 (サンプル)', completed: false, parentId: null, childrenIds: [], createdAt: new Date(), completedAt: null, tags: [], priority: 'medium' },
+    'task-1': { id: 'task-1', title: '親タスク 1 (サンプル)', description: "これは親タスク1の説明です。", completed: false, parentId: null, childrenIds: ['task-2', 'task-3'], createdAt: new Date(), completedAt: null, tags: [], priority: 'medium' as TaskPriority },
+    'task-2': { id: 'task-2', title: '子タスク 1-1 (サンプル)', description: "子タスク1-1の詳細。", completed: false, parentId: 'task-1', childrenIds: [], createdAt: new Date(), completedAt: null, tags: [], priority: 'low' as TaskPriority },
+    'task-3': { id: 'task-3', title: '子タスク 1-2 (サンプル)', completed: false, parentId: 'task-1', childrenIds: ['task-4'], createdAt: new Date(), completedAt: null, tags: [], priority: 'high' as TaskPriority },
+    'task-4': { id: 'task-4', title: '孫タスク 1-2-1 (サンプル)', completed: true, parentId: 'task-3', childrenIds: [], createdAt: new Date(), completedAt: new Date(), tags: [], priority: 'medium' as TaskPriority },
+    'task-5': { id: 'task-5', title: '親タスク 2 (サンプル)', completed: false, parentId: null, childrenIds: [], createdAt: new Date(), completedAt: null, tags: [], priority: 'medium' as TaskPriority },
   },
   rootTaskIds: ['task-1', 'task-5'],
-  taskTemplates: { // ★ 初期テンプレート例
+  taskTemplates: {
     'template-morning': {
       id: 'template-morning',
       name: '朝の準備ルーティン',
@@ -58,26 +69,26 @@ const initialCoreState = {
         { title: '起床・着替え', estimatedMinutes: 15, description: "アラームで起き、今日の服装を選ぶ。" },
         { title: '朝食', estimatedMinutes: 20, description: "シリアルとコーヒーを準備して食べる。" },
         { title: '歯磨き・洗顔', estimatedMinutes: 10 },
-        { title: '今日の予定確認', estimatedMinutes: 5, priority: 'high' },
+        { title: '今日の予定確認', estimatedMinutes: 5, priority: 'high' as TaskPriority },
       ],
     },
     'template-project-kickoff': {
       id: 'template-project-kickoff',
       name: 'プロジェクト開始準備',
       tasks: [
-        { title: '要件定義確認', priority: 'high', estimatedMinutes: 120 },
-        { title: 'タスク洗い出し', priority: 'high', children: [
+        { title: '要件定義確認', priority: 'high' as TaskPriority, estimatedMinutes: 120 },
+        { title: 'タスク洗い出し', priority: 'high' as TaskPriority, children: [
             {title: 'WBS作成', estimatedMinutes: 60}, {title: '担当者割り当て', estimatedMinutes: 30}
         ]},
-        { title: 'スケジュール作成', priority: 'medium', estimatedMinutes: 90 },
-        { title: 'キックオフミーティング設定', priority: 'low', tags: ['meeting']},
+        { title: 'スケジュール作成', priority: 'medium' as TaskPriority, estimatedMinutes: 90 },
+        { title: 'キックオフミーティング設定', priority: 'low' as TaskPriority, tags: ['meeting']},
       ]
     }
   },
 };
 
 const nonPersistentState = {
-  columns: [], // columns は起動時に setActiveColumns で初期化
+  columns: [],
   selectedTaskId: null,
   editingTaskId: null,
 };
@@ -93,7 +104,7 @@ export const useTaskStore = create<TaskState>()(
       setSelectedTaskId: (taskId) => set({ selectedTaskId: taskId }),
 
       addTemplate: (template) => set((state) => ({
-        taskTemplates: { ...state.taskTemplates, [template.id]: template }
+        taskTemplates: { ...state.taskTemplates, [template.id]: template },
       })),
       deleteTemplate: (templateId) => set((state) => {
         const newTemplates = { ...state.taskTemplates };
@@ -101,76 +112,90 @@ export const useTaskStore = create<TaskState>()(
         return { taskTemplates: newTemplates };
       }),
       applyTemplate: (templateId, parentId, startDateTime) => {
-        const state = get();
-        const template = state.taskTemplates[templateId];
+        const { taskTemplates } = get();
+        const template = taskTemplates[templateId];
         if (!template) return [];
 
-        const createdTaskIds: string[] = [];
+        const generatedTopLevelTaskIds: string[] = [];
+        let tempTasks: Record<string, Task> = {};
+        let tempRootTaskIds: string[] = [];
+        let tempParentChildMap: Record<string, string[]> = {};
 
-        const createTasksFromTemplate = (
-          templateTasks: TaskTemplate['tasks'],
+        const processTaskDefinition = (
+          taskDef: TaskTemplateTaskDefinition,
           currentParentId: string | null
-        ) => {
-          for (const taskDef of templateTasks) {
-            const newTask: Task = {
-              id: uuidv4(),
-              title: taskDef.title,
-              description: taskDef.description,
-              completed: false,
-              parentId: currentParentId,
-              childrenIds: [],
-              createdAt: startDateTime || new Date(), // TODO: startDateTime と連続タスクの開始時間考慮
-              completedAt: null,
-              estimatedMinutes: taskDef.estimatedMinutes,
-              priority: taskDef.priority || 'medium',
-              tags: taskDef.tags || [],
-            };
-            state.addTask(newTask); // addTaskを直接呼ぶ代わりに、ここで状態変更ロジックを再利用するか、一括で追加する
-            createdTaskIds.push(newTask.id);
-
-            if (taskDef.children && taskDef.children.length > 0) {
-              const childIds = createTasksFromTemplate(taskDef.children, newTask.id);
-              // tasks[newTask.id] を直接変更するのは immer がないと危険なので set を使う
-              set(s => ({
-                tasks: {
-                  ...s.tasks,
-                  [newTask.id]: { ...s.tasks[newTask.id], childrenIds: childIds }
-                }
-              }));
+        ): string => {
+          const newTaskId = uuidv4();
+          const newTask: Task = {
+            id: newTaskId,
+            title: taskDef.title,
+            description: taskDef.description || undefined,
+            completed: false,
+            parentId: currentParentId,
+            childrenIds: [],
+            createdAt: startDateTime || new Date(),
+            completedAt: null,
+            estimatedMinutes: taskDef.estimatedMinutes || undefined,
+            priority: taskDef.priority || 'medium',
+            tags: taskDef.tags || [],
+          };
+          tempTasks[newTaskId] = newTask;
+          if (currentParentId) {
+            if (!tempParentChildMap[currentParentId]) {
+              tempParentChildMap[currentParentId] = [];
             }
+            tempParentChildMap[currentParentId].push(newTaskId);
+          } else {
+            tempRootTaskIds.push(newTaskId);
+            generatedTopLevelTaskIds.push(newTaskId);
           }
-          return templateTasks.map(t => createdTaskIds[createdTaskIds.length - templateTasks.length + templateTasks.indexOf(t)]); // HACK: IDを正しく引く方法改善要
+
+          if (taskDef.children && taskDef.children.length > 0) {
+            taskDef.children.forEach(childDef => processTaskDefinition(childDef, newTaskId));
+          }
+          return newTaskId;
         };
 
-        // HACK: applyTemplate内でのaddTask/setの呼び出しは複雑になるため、
-        // 本来は一連のタスクを準備してから一括でsetするのが望ましい。
-        // ここでは簡略化のため、トップレベルのタスクのみ生成する例を示す。
-        // (上記createTasksFromTemplateは再帰的なID処理に課題あり)
+        template.tasks.forEach(taskDef => processTaskDefinition(taskDef, parentId));
 
-        const topLevelTaskIds: string[] = [];
-        template.tasks.forEach(taskDef => {
-            const newTask: Task = {
-              id: uuidv4(),
-              title: taskDef.title,
-              description: taskDef.description,
-              completed: false,
-              parentId: parentId,
-              childrenIds: [], // Children will be processed recursively later if needed
-              createdAt: new Date(),
-              completedAt: null,
-              estimatedMinutes: taskDef.estimatedMinutes,
-              priority: taskDef.priority || 'medium',
-              tags: taskDef.tags || [],
-            };
-            // ここでaddTaskを呼ぶのは、setの外部なので注意。
-            // ストアアクション内で別のストアアクションを呼ぶのは通常はOK。
-            get().addTask(newTask); // get() で最新のaddTaskを取得して実行
-            topLevelTaskIds.push(newTask.id);
-            // TODO: サブタスクの再帰的生成と childrenIds の設定
+        Object.keys(tempParentChildMap).forEach(pId => {
+          if (tempTasks[pId]) {
+            tempTasks[pId].childrenIds = tempParentChildMap[pId];
+          }
         });
 
-        // setActiveColumnsなどを呼んでUIを更新する必要があるかもしれない
-        return topLevelTaskIds;
+        set(state => {
+          const finalTasks = { ...state.tasks, ...tempTasks };
+          let finalRootTaskIds = [...state.rootTaskIds];
+          tempRootTaskIds.forEach(id => {
+            if (!finalRootTaskIds.includes(id)) finalRootTaskIds.push(id);
+          });
+
+          if (parentId && finalTasks[parentId]) {
+            const parentTask = finalTasks[parentId];
+            const newChildrenForParent = new Set([...parentTask.childrenIds, ...(tempParentChildMap[parentId] || [])]);
+            finalTasks[parentId] = { ...parentTask, childrenIds: Array.from(newChildrenForParent) };
+          }
+
+          let newColumns = state.columns.map(col => {
+            if (col.parentTaskId === parentId) {
+              const taskIdsSet = new Set(col.taskIds);
+              (tempParentChildMap[parentId || ''] || tempRootTaskIds).forEach(tid => taskIdsSet.add(tid));
+              return { ...col, taskIds: Array.from(taskIdsSet) };
+            }
+            return col;
+          });
+           if (!parentId) {
+                const rootColumnIndex = newColumns.findIndex(col => col.parentTaskId === null && col.level === 0);
+                if (rootColumnIndex !== -1) {
+                    const taskIdsSet = new Set(newColumns[rootColumnIndex].taskIds);
+                    tempRootTaskIds.forEach(tid => taskIdsSet.add(tid));
+                    newColumns[rootColumnIndex] = { ...newColumns[rootColumnIndex], taskIds: Array.from(taskIdsSet) };
+                }
+           }
+          return { tasks: finalTasks, rootTaskIds: finalRootTaskIds, columns: newColumns };
+        });
+        return generatedTopLevelTaskIds;
       },
 
       addTask: (task) => set((state) => {
@@ -192,7 +217,6 @@ export const useTaskStore = create<TaskState>()(
       updateTask: (taskId, updatedProperties) => set((state) => {
         const taskToUpdate = state.tasks[taskId];
         if (!taskToUpdate) return state;
-        // createdAt は更新しない
         const { createdAt, ...restOfProperties } = updatedProperties;
         return {
           tasks: {
@@ -206,9 +230,7 @@ export const useTaskStore = create<TaskState>()(
         const newTasks = { ...state.tasks };
         const taskToDelete = newTasks[taskId];
         if (!taskToDelete) return state;
-
         delete newTasks[taskId];
-
         if (taskToDelete.parentId) {
           const parent = newTasks[taskToDelete.parentId];
           if (parent) {
@@ -219,10 +241,8 @@ export const useTaskStore = create<TaskState>()(
           }
         }
         const newRootTaskIds = state.rootTaskIds.filter(id => id !== taskId);
-        // columns は setActiveColumns で管理
         const newSelectedTaskId = state.selectedTaskId === taskId ? null : state.selectedTaskId;
         const newEditingTaskId = state.editingTaskId === taskId ? null : state.editingTaskId;
-
         return { tasks: newTasks, rootTaskIds: newRootTaskIds, selectedTaskId: newSelectedTaskId, editingTaskId: newEditingTaskId };
       }),
 
@@ -242,12 +262,10 @@ export const useTaskStore = create<TaskState>()(
       }),
 
       addColumn: (column) => set((state) => ({
-         // columnsは動的管理なので、このアクションは現状あまり使われない
         columns: [...state.columns, column],
       })),
 
       removeColumn: (columnId) => set((state) => ({
-        // columnsは動的管理
         columns: state.columns.filter(col => col.id !== columnId),
       })),
 
@@ -255,14 +273,12 @@ export const useTaskStore = create<TaskState>()(
         set((state) => {
           const newColumns: TaskColumn[] = [];
           let level = 0;
-
           newColumns.push({
             id: `column-root-${Date.now()}`,
             taskIds: state.rootTaskIds.filter(id => !!state.tasks[id]),
             parentTaskId: null,
             level: level++,
           });
-
           for (const taskId of selectedTaskIdsHierarchy) {
             const task = state.tasks[taskId];
             if (task && task.childrenIds && task.childrenIds.length > 0) {
@@ -274,18 +290,92 @@ export const useTaskStore = create<TaskState>()(
               });
             }
           }
-          // カラム数の制限例 (最大5カラム)
           return { columns: newColumns.slice(0, 5) };
         });
       },
+
+      // --- Selectors for Statistics ---
+      getCompletedTasksTotalCount: () => {
+        const { tasks } = get();
+        return Object.values(tasks).filter(task => task.completed).length;
+      },
+      getTasksCompletedTodayCount: () => {
+        const { tasks } = get();
+        const todayStart = new Date();
+        todayStart.setHours(0, 0, 0, 0);
+        return Object.values(tasks).filter(
+          task => task.completed && task.completedAt && new Date(task.completedAt) >= todayStart
+        ).length;
+      },
+      getTasksCompletedThisWeekCount: () => {
+        const { tasks } = get();
+        const now = new Date();
+        const today = now.getDay();
+        const weekStart = new Date(now);
+        weekStart.setDate(now.getDate() - (today === 0 ? 6 : today - 1)); // Monday as start of week
+        weekStart.setHours(0, 0, 0, 0);
+        return Object.values(tasks).filter(
+          task => task.completed && task.completedAt && new Date(task.completedAt) >= weekStart
+        ).length;
+      },
+      getTasksCompletedThisMonthCount: () => {
+        const { tasks } = get();
+        const now = new Date();
+        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+        monthStart.setHours(0, 0, 0, 0);
+        return Object.values(tasks).filter(
+          task => task.completed && task.completedAt && new Date(task.completedAt) >= monthStart
+        ).length;
+      },
+
+      // --- Data Import/Export Actions ---
+      importState: (data: ExportedData) => {
+        if (!data || typeof data.tasks !== 'object' || !Array.isArray(data.rootTaskIds) || typeof data.taskTemplates !== 'object') {
+          console.error("Invalid data format for import: missing essential keys.");
+          return false;
+        }
+        // Consider adding a version check here: if (data.version !== CURRENT_APP_DATA_VERSION) ...
+
+        try {
+          const rehydratedTasks = Object.fromEntries(
+            Object.entries(data.tasks).map(([id, task]: [string, ExportedTask]) => [ // Explicitly type task as ExportedTask
+              id,
+              {
+                ...task,
+                createdAt: new Date(task.createdAt),
+                completedAt: task.completedAt ? new Date(task.completedAt) : null,
+              },
+            ])
+          );
+
+          // TaskTemplate dates: Assuming TaskTemplate structure does not contain Date objects that need rehydration.
+          // If it did, a similar rehydration process would be needed for data.taskTemplates.
+
+          set({
+            tasks: rehydratedTasks,
+            rootTaskIds: data.rootTaskIds,
+            taskTemplates: data.taskTemplates as Record<string, TaskTemplate>, // Cast if confident about structure
+            selectedTaskId: null,
+            editingTaskId: null,
+            columns: [], // Columns will be rebuilt by setActiveColumns
+          });
+          // It's crucial that after import, UI (e.g., Board) calls setActiveColumns([])
+          // to rebuild the column structure based on the new rootTaskIds and tasks.
+          // Returning true indicates success, UI can then trigger column refresh.
+          return true;
+        } catch (error) {
+            console.error("Error during data rehydration in importState:", error);
+            return false;
+        }
+      },
     }),
     {
-      name: 'flowprint-task-store-v1', // ローカルストレージのキー名 (バージョン変更)
+      name: 'flowprint-task-store-v1',
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({
         tasks: state.tasks,
         rootTaskIds: state.rootTaskIds,
-        taskTemplates: state.taskTemplates, // ★ テンプレートも永続化
+        taskTemplates: state.taskTemplates,
       }),
       onRehydrateStorage: () => {
         console.log("Attempting to rehydrate tasks from storage...");
@@ -294,31 +384,15 @@ export const useTaskStore = create<TaskState>()(
             console.error("Failed to rehydrate state from storage:", error);
             return;
           }
-          // Zustand v4.x.x では hydratedState は (state: S | undefined) => void の形で渡される
-          // useTaskStore.setState(...) を使ってマージする形が推奨される場合がある
           if (hydratedStateFromStorage && hydratedStateFromStorage.tasks) {
             console.log("Tasks found in storage, rehydrating dates...");
-            const tasksWithDates = Object.fromEntries(
-              Object.entries(hydratedStateFromStorage.tasks).map(([id, task]: [string, any]) => {
-                return [id, {
-                  ...task,
-                  createdAt: task.createdAt ? new Date(task.createdAt) : new Date(), // フォールバック
-                  completedAt: task.completedAt ? new Date(task.completedAt) : null,
-                }];
-              })
-            );
-            // useTaskStore.setState({ tasks: tasksWithDates, rootTaskIds: hydratedStateFromStorage.rootTaskIds || [] });
-            // 直接 hydratedState を変更する代わりに、新しいオブジェクトを返す (Zustand のバージョンや onRehydrateStorage の正確なシグネチャによる)
-            // 今回は persist のデフォルトの復元挙動に任せつつ、Date変換だけ行う
-             if (hydratedStateFromStorage.tasks) { // hydratedStateFromStorageがnullでないことを確認
-                for (const taskId in hydratedStateFromStorage.tasks) {
-                    const task = (hydratedStateFromStorage.tasks as Record<string,Task>)[taskId];
-                    if (task.createdAt && typeof task.createdAt === 'string') {
-                        task.createdAt = new Date(task.createdAt);
-                    }
-                    if (task.completedAt && typeof task.completedAt === 'string') {
-                        task.completedAt = new Date(task.completedAt);
-                    }
+            for (const taskId in hydratedStateFromStorage.tasks) {
+                const task = (hydratedStateFromStorage.tasks as Record<string,Task>)[taskId];
+                if (task.createdAt && typeof task.createdAt === 'string') {
+                    task.createdAt = new Date(task.createdAt);
+                }
+                if (task.completedAt && typeof task.completedAt === 'string') {
+                    task.completedAt = new Date(task.completedAt);
                 }
             }
           } else {
@@ -327,11 +401,9 @@ export const useTaskStore = create<TaskState>()(
         };
       },
       migrate: (persistedState: any, version: number) => {
-        // 将来的なマイグレーション処理
-        // if (version < 1) { ... }
         return persistedState as TaskState;
       },
-      version: 0, // 初期バージョン
+      version: 0,
     }
   )
 );

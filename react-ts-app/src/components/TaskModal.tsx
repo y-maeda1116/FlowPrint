@@ -17,6 +17,8 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, taskToEdit, pare
   const updateTask = useTaskStore((state) => state.updateTask);
   const taskTemplates = useTaskStore(state => state.taskTemplates);
   const applyTemplate = useTaskStore(state => state.applyTemplate);
+  const setSelectedTaskId = useTaskStore(state => state.setSelectedTaskId); // For selecting new task
+  const setEditingTaskId = useTaskStore(state => state.setEditingTaskId); // For editing new task
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -53,33 +55,41 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, taskToEdit, pare
   }, [taskToEdit, isOpen]);
 
   const handleTimeSplit = () => {
-    if (!title.trim()) {
-        alert('分割するタスクの基本タイトルを入力してください。');
-        return;
-    }
+    const baseTitle = title.trim() || "分割タスク"; // Use default if title is empty for split
     if (!totalSplitTime || !splitUnitTime || totalSplitTime <= 0 || splitUnitTime <= 0) {
         alert('総時間と分割単位を正しく入力してください。');
         return;
     }
 
     const numberOfTasks = Math.ceil(totalSplitTime / splitUnitTime);
-    const actualUnitTime = totalSplitTime / numberOfTasks; // Equally distribute
+    // const actualUnitTime = totalSplitTime / numberOfTasks; // Equally distribute is complex with rounding, stick to splitUnitTime
+    const createdTaskIds: string[] = [];
 
     for (let i = 0; i < numberOfTasks; i++) {
+        const taskTitle = `${baseTitle} (${i + 1}/${numberOfTasks})`;
+        // For the last task, adjust its estimated time to make the total match totalSplitTime
+        const currentTaskEstMinutes = (i === numberOfTasks - 1)
+            ? (totalSplitTime - (splitUnitTime * i))
+            : splitUnitTime;
+
         const newTask: Task = {
             id: uuidv4(),
-            title: `${title.trim()} (${i + 1}/${numberOfTasks})`,
-            description: description.trim() || undefined,
+            title: taskTitle,
+            description: description.trim() || undefined, // Carry over description
             completed: false,
             parentId: parentId !== undefined ? parentId : null,
             childrenIds: [],
-            createdAt: new Date(new Date().getTime() + i * actualUnitTime * 60000), // Offset start time
+            createdAt: new Date(new Date().getTime() + i * (splitUnitTime * 60000)), // Offset start time slightly
             completedAt: null,
-            estimatedMinutes: Math.round(actualUnitTime),
-            priority,
-            tags: [],
+            estimatedMinutes: Math.max(1, Math.round(currentTaskEstMinutes)), // Ensure at least 1 minute
+            priority, // Carry over priority
+            tags: [], // Carry over tags if any (not implemented yet)
         };
         addTask(newTask);
+        createdTaskIds.push(newTask.id);
+    }
+    if (createdTaskIds.length > 0) {
+        setSelectedTaskId(createdTaskIds[0]); // Select the first created task
     }
     onClose();
   }
@@ -89,19 +99,24 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, taskToEdit, pare
         alert('適用するテンプレートを選択してください。');
         return;
     }
-    applyTemplate(selectedTemplate, parentId !== undefined ? parentId : null, new Date());
+    const newIds = applyTemplate(selectedTemplate, parentId !== undefined ? parentId : null, new Date());
+    if (newIds.length > 0) {
+        setSelectedTaskId(newIds[0]); // Select the first top-level task from the template
+        // Optionally, open the first task for editing, or navigate to its column
+        // setEditingTaskId(newIds[0]);
+    }
     onClose();
   }
 
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim() && !selectedTemplate && !totalSplitTime) { // Title required unless using template/split
-      alert('タスクタイトルは必須です。');
-      return;
-    }
 
     if (taskToEdit) { // Editing existing task
+      if (!title.trim()) {
+        alert('タスクタイトルは必須です。');
+        return;
+      }
       updateTask(taskToEdit.id, {
           title: title.trim(),
           description: description.trim() || undefined,
@@ -110,10 +125,16 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, taskToEdit, pare
       });
     } else { // Creating new task(s)
       if (selectedTemplate && taskTemplates[selectedTemplate]) {
-          handleApplyTemplate();
+          handleApplyTemplate(); // This will also close the modal
+          return; // Important: stop further execution in handleSubmit
       } else if (totalSplitTime && splitUnitTime && totalSplitTime > 0 && splitUnitTime > 0) {
-          handleTimeSplit();
+          handleTimeSplit(); // This will also close the modal
+          return; // Important: stop further execution in handleSubmit
       } else { // Simple new task
+        if (!title.trim()) {
+          alert('タスクタイトルは必須です。');
+          return;
+        }
         const newTask: Task = {
           id: uuidv4(),
           title: title.trim(),
@@ -128,12 +149,14 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, taskToEdit, pare
           tags: [],
         };
         addTask(newTask);
+        setSelectedTaskId(newTask.id); // Select the newly created task
+        // setEditingTaskId(newTask.id); // Optionally open for editing
       }
     }
-    onClose();
+    onClose(); // Close modal for simple add or edit
   };
 
-  const isCreatingFromTemplate = !taskToEdit && !!selectedTemplate;
+  const isCreatingFromTemplate = !taskToEdit && !!selectedTemplate && !(totalSplitTime && totalSplitTime > 0) ;
   const isCreatingFromSplit = !taskToEdit && !!totalSplitTime && !!splitUnitTime && totalSplitTime > 0 && splitUnitTime > 0;
 
 
