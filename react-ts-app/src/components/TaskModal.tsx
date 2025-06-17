@@ -275,7 +275,6 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, taskToEdit, pare
                     </button>
                   </div>
                 </form>
-              </Dialog.Panel>
             </Transition.Child>
           </div>
         </div>
