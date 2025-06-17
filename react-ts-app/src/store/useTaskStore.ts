@@ -1,26 +1,12 @@
 // src/store/useTaskStore.ts
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { Task, TaskColumn, TaskPriority, TaskTemplate, ExportedData, ExportedTask } from '../types'; // 型をインポート
+import { Task, TaskColumn, TaskPriority, TaskTemplate, TaskTemplateTaskDefinition, ExportedData, ExportedTask } from '../types'; // 型をインポート
 import { v4 as uuidv4 } from 'uuid';
 
 // TaskTemplateTaskDefinition と TaskTemplate は既にインポートされているか、ここで定義されているはず
 // If not, they should be imported from types.ts or defined here.
 // Assuming TaskTemplate is already correctly defined/imported as per previous steps.
-
-export interface TaskTemplateTaskDefinition { // Keep if not moved to types.ts
-  title: string;
-  description?: string;
-  estimatedMinutes?: number;
-  priority?: TaskPriority;
-  tags?: string[];
-  children?: TaskTemplateTaskDefinition[];
-}
-export interface TaskTemplate {
-  id: string;
-  name: string;
-  tasks: TaskTemplateTaskDefinition[];
-}
 
 interface TaskState {
   tasks: Record<string, Task>;
@@ -151,12 +137,14 @@ export const useTaskStore = create<TaskState>()(
           }
 
           if (taskDef.children && taskDef.children.length > 0) {
-            taskDef.children.forEach(childDef => processTaskDefinition(childDef, newTaskId));
+            taskDef.children.forEach((childDef: TaskTemplateTaskDefinition) => processTaskDefinition(childDef, newTaskId));
+
           }
           return newTaskId;
         };
 
-        template.tasks.forEach(taskDef => processTaskDefinition(taskDef, parentId));
+        //template.tasks.forEach(taskDef => processTaskDefinition(taskDef, parentId));
+        template.tasks.forEach((taskDef: TaskTemplateTaskDefinition) => { /* ... */ });
 
         Object.keys(tempParentChildMap).forEach(pId => {
           if (tempTasks[pId]) {

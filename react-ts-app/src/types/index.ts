@@ -10,7 +10,7 @@ export interface Task {
   completedAt: Date | null;
   estimatedMinutes?: number;
   tags: string[];
-  priority: 'low' | 'medium' | 'high';
+  priority: TaskPriority;
 }
 
 export interface TaskColumn {
@@ -27,6 +27,22 @@ export interface ExportedTask extends Omit<Task, 'createdAt' | 'completedAt'> {
 export interface ExportedData {
   tasks: Record<string, ExportedTask>;
   rootTaskIds: string[];
-  taskTemplates: Record<string, any>; // Use 'any' for now, or define ExportedTaskTemplate if dates exist
+  taskTemplates: Record<string, TaskTemplate>; // Use 'any' for now, or define ExportedTaskTemplate if dates exist
   version: number; // データフォーマットのバージョン
+}
+export type TaskPriority = 'low' | 'medium' | 'high';
+
+export interface TaskTemplateTaskDefinition {
+  title: string;
+  description?: string;
+  estimatedMinutes?: number;
+  priority?: TaskPriority;
+  tags?: string[];
+  children?: TaskTemplateTaskDefinition[];
+}
+
+export interface TaskTemplate {
+  id: string;
+  name: string;
+  tasks: TaskTemplateTaskDefinition[];
 }

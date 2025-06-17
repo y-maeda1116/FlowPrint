@@ -1,7 +1,7 @@
 // src/store/useTaskStore.test.ts
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import useTaskStore from './useTaskStore';
-import { Task } from '../types';
+import useTaskStore from '../../react-ts-app/src/store/useTaskStore';
+import { Task } from '../../react-ts-app/src/types';
 import { v4 as uuidv4 } from 'uuid';
 
 // persistミドルウェアがlocalStorageを使用するため、各テスト後にクリア
@@ -19,16 +19,25 @@ beforeEach(() => {
   // This involves calling setState with the initial parts of the state.
   // The actual initial state from the store includes sample data, which might be okay for some tests,
   // but for isolated unit tests, a truly empty state is better.
-  const defaultTestState = {
+  //const defaultTestState = {
+    //tasks: {},
+    //rootTaskIds: [],
+    //columns: [{id: 'test-root-col', taskIds: [], parentTaskId: null, level: 0}], // Minimal column for root tasks
+    //taskTemplates: {},
+    //selectedTaskId: null,
+    //editingTaskId: null,
+    //// Selectors are methods, not state properties to reset here
+  //};
+  //useTaskStore.setState(defaultTestState, true); // true replaces the anystate
+    useTaskStore.setState({
     tasks: {},
     rootTaskIds: [],
-    columns: [{id: 'test-root-col', taskIds: [], parentTaskId: null, level: 0}], // Minimal column for root tasks
+    columns: [{ id: 'root-col-test', taskIds: [], parentTaskId: null, level: 0 }],
     taskTemplates: {},
     selectedTaskId: null,
     editingTaskId: null,
-    // Selectors are methods, not state properties to reset here
-  };
-  useTaskStore.setState(defaultTestState, true); // true replaces the anystate
+    // 注意: アクションメソッドは含めません
+  }); // trueで状態を置き換え
 });
 
 afterEach(() => {
