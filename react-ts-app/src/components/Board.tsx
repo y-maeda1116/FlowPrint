@@ -33,13 +33,14 @@ const Board: React.FC = () => {
   const [focusedColumnIdForPrint, setFocusedColumnIdForPrint] = useState<string | null>(null);
 
   const handleTaskAdded = (newTaskId: string, taskParentId: string | null) => {
-    const newTask = tasks[newTaskId];
+    const currentTasks = useTaskStore.getState().tasks;
+    const newTask = currentTasks[newTaskId];
     if (!newTask) return;
 
-    let newHierarchy: string[] = [];
+    let newHierarchy: string[] = []; // 親までの階層
     if (taskParentId) {
       const buildHierarchy = (currentId: string, path: string[]): string[] => {
-        const t = tasks[currentId];
+        const t = currentTasks[currentId]; // currentTasks を使用
         if (!t) return path;
         path.unshift(currentId);
         return t.parentId ? buildHierarchy(t.parentId, path) : path;
@@ -47,10 +48,12 @@ const Board: React.FC = () => {
       newHierarchy = buildHierarchy(taskParentId, []);
     }
 
+    // 新しいタスク自身を含む完全な階層を作成
+    const fullNewHierarchy = [...newHierarchy, newTaskId];
+
     setSelectedTaskId(newTaskId);
-
-    setActiveColumns(newHierarchy);
-
+    setSelectedTaskHierarchy(fullNewHierarchy);
+    setActiveColumns(fullNewHierarchy);
   };
 
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
