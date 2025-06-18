@@ -32,6 +32,27 @@ const Board: React.FC = () => {
   const [selectedTaskHierarchy, setSelectedTaskHierarchy] = useState<string[]>([]);
   const [focusedColumnIdForPrint, setFocusedColumnIdForPrint] = useState<string | null>(null);
 
+  const handleTaskAdded = (newTaskId: string, taskParentId: string | null) => {
+    const newTask = tasks[newTaskId];
+    if (!newTask) return;
+
+    let newHierarchy: string[] = [];
+    if (taskParentId) {
+      const buildHierarchy = (currentId: string, path: string[]): string[] => {
+        const t = tasks[currentId];
+        if (!t) return path;
+        path.unshift(currentId);
+        return t.parentId ? buildHierarchy(t.parentId, path) : path;
+      };
+      newHierarchy = buildHierarchy(taskParentId, []);
+    }
+
+    setSelectedTaskId(newTaskId);
+
+    setActiveColumns(newHierarchy);
+
+  };
+
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [taskToEditInModal, setTaskToEditInModal] = useState<Task | null>(null);
   const [modalParentId, setModalParentId] = useState<string | null>(null);
@@ -231,6 +252,7 @@ const Board: React.FC = () => {
           onClose={() => setIsTaskModalOpen(false)}
           taskToEdit={taskToEditInModal}
           parentId={modalParentId}
+          onTaskAdded={handleTaskAdded}
         />
       )}
     </div>

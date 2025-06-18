@@ -10,9 +10,10 @@ interface TaskModalProps {
   onClose: () => void;
   taskToEdit?: Task | null;
   parentId?: string | null;
+  onTaskAdded?: (newTaskId: string, parentId: string | null) => void;
 }
 
-const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, taskToEdit, parentId }) => {
+const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, taskToEdit, parentId, onTaskAdded }) => {
   const addTask = useTaskStore((state) => state.addTask);
   const updateTask = useTaskStore((state) => state.updateTask);
   const taskTemplates = useTaskStore(state => state.taskTemplates);
@@ -90,6 +91,7 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, taskToEdit, pare
     }
     if (createdTaskIds.length > 0) {
         setSelectedTaskId(createdTaskIds[0]); // Select the first created task
+        onTaskAdded?.(createdTaskIds[0], parentId !== undefined ? parentId : null);
     }
     onClose();
   }
@@ -102,6 +104,7 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, taskToEdit, pare
     const newIds = applyTemplate(selectedTemplate, parentId !== undefined ? parentId : null, new Date());
     if (newIds.length > 0) {
         setSelectedTaskId(newIds[0]); // Select the first top-level task from the template
+        onTaskAdded?.(newIds[0], parentId !== undefined ? parentId : null);
         // Optionally, open the first task for editing, or navigate to its column
         // setEditingTaskId(newIds[0]);
     }
@@ -150,6 +153,7 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, taskToEdit, pare
         };
         addTask(newTask);
         setSelectedTaskId(newTask.id); // Select the newly created task
+        onTaskAdded?.(newTask.id, newTask.parentId);
         // setEditingTaskId(newTask.id); // Optionally open for editing
       }
     }
