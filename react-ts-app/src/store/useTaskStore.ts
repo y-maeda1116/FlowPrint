@@ -258,7 +258,6 @@ export const useTaskStore = create<TaskState>()(
       })),
 
       setActiveColumns: (selectedTaskIdsHierarchy: string[]) => {
-        console.log('[useTaskStore] setActiveColumns CALLED with hierarchy:', JSON.parse(JSON.stringify(selectedTaskIdsHierarchy)));
         set((state) => {
           const newColumns: TaskColumn[] = [];
           let level = 0;
@@ -268,7 +267,6 @@ export const useTaskStore = create<TaskState>()(
             parentTaskId: null,
             level: level++,
           });
-          console.log('[useTaskStore] setActiveColumns - Root column created:', JSON.parse(JSON.stringify(newColumns[0])));
           for (const taskId of selectedTaskIdsHierarchy) {
             const task = state.tasks[taskId];
             if (task && task.childrenIds && task.childrenIds.length > 0) {
@@ -279,15 +277,9 @@ export const useTaskStore = create<TaskState>()(
                 level: level++,
               };
               newColumns.push(childColumn);
-              console.log('[useTaskStore] setActiveColumns - Child column for', taskId, 'created:', JSON.parse(JSON.stringify(childColumn)));
             }
           }
           const finalColumns = newColumns.slice(0, 5);
-          console.log('[useTaskStore] setActiveColumns - FINAL newColumns to be set (length):', finalColumns.length, JSON.parse(JSON.stringify(finalColumns)));
-          // 以前のcolumnsと比較するためのログ
-          if (state.columns) {
-              console.log('[useTaskStore] setActiveColumns - OLD columns (length):', state.columns.length, JSON.parse(JSON.stringify(state.columns)));
-          }
           return { columns: finalColumns }; // Ensure a new reference is returned
         });
       },

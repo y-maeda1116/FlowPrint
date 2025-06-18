@@ -33,14 +33,12 @@ const Board: React.FC = () => {
   const [focusedColumnIdForPrint, setFocusedColumnIdForPrint] = useState<string | null>(null);
 
   const handleTaskAdded = (newTaskId: string, taskParentId: string | null) => {
-    console.log('[Board.tsx] handleTaskAdded CALLED with newTaskId:', newTaskId, 'taskParentId:', taskParentId);
     const currentTasks = useTaskStore.getState().tasks;
     const newTask = currentTasks[newTaskId];
     if (!newTask) {
-      console.error('[Board.tsx] handleTaskAdded - newTask not found in store!', newTaskId);
+      // console.error('[Board.tsx] handleTaskAdded - newTask not found in store!', newTaskId); // エラーログは残す選択肢もある
       return;
     }
-    console.log('[Board.tsx] handleTaskAdded - newTask:', JSON.parse(JSON.stringify(newTask)));
 
     let newHierarchy: string[] = [];
     if (taskParentId) {
@@ -52,21 +50,12 @@ const Board: React.FC = () => {
       };
       newHierarchy = buildHierarchy(taskParentId, []);
     }
-    console.log('[Board.tsx] handleTaskAdded - Parent hierarchy:', JSON.parse(JSON.stringify(newHierarchy)));
 
     const fullNewHierarchy = [...newHierarchy, newTaskId];
-    console.log('[Board.tsx] handleTaskAdded - Full new hierarchy for setActiveColumns/setSelectedTaskHierarchy:', JSON.parse(JSON.stringify(fullNewHierarchy)));
 
     setSelectedTaskId(newTaskId);
     setSelectedTaskHierarchy(fullNewHierarchy);
     setActiveColumns(fullNewHierarchy);
-    console.log('[Board.tsx] handleTaskAdded - Called setSelectedTaskId, setSelectedTaskHierarchy, setActiveColumns');
-
-    // 呼び出し直後のストアの状態を確認 (オプション)
-    // setTimeout(() => {
-    //   const latestColumns = useTaskStore.getState().columns;
-    //   console.log('[Board.tsx] handleTaskAdded - Columns in store AFTER async update (length):', latestColumns.length, JSON.parse(JSON.stringify(latestColumns)));
-    // }, 0);
   };
 
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
