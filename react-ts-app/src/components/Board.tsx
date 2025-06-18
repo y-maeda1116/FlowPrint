@@ -33,27 +33,40 @@ const Board: React.FC = () => {
   const [focusedColumnIdForPrint, setFocusedColumnIdForPrint] = useState<string | null>(null);
 
   const handleTaskAdded = (newTaskId: string, taskParentId: string | null) => {
+    console.log('[Board.tsx] handleTaskAdded CALLED with newTaskId:', newTaskId, 'taskParentId:', taskParentId);
     const currentTasks = useTaskStore.getState().tasks;
     const newTask = currentTasks[newTaskId];
-    if (!newTask) return;
+    if (!newTask) {
+      console.error('[Board.tsx] handleTaskAdded - newTask not found in store!', newTaskId);
+      return;
+    }
+    console.log('[Board.tsx] handleTaskAdded - newTask:', JSON.parse(JSON.stringify(newTask)));
 
-    let newHierarchy: string[] = []; // 親までの階層
+    let newHierarchy: string[] = [];
     if (taskParentId) {
       const buildHierarchy = (currentId: string, path: string[]): string[] => {
-        const t = currentTasks[currentId]; // currentTasks を使用
+        const t = currentTasks[currentId];
         if (!t) return path;
         path.unshift(currentId);
         return t.parentId ? buildHierarchy(t.parentId, path) : path;
       };
       newHierarchy = buildHierarchy(taskParentId, []);
     }
+    console.log('[Board.tsx] handleTaskAdded - Parent hierarchy:', JSON.parse(JSON.stringify(newHierarchy)));
 
-    // 新しいタスク自身を含む完全な階層を作成
     const fullNewHierarchy = [...newHierarchy, newTaskId];
+    console.log('[Board.tsx] handleTaskAdded - Full new hierarchy for setActiveColumns/setSelectedTaskHierarchy:', JSON.parse(JSON.stringify(fullNewHierarchy)));
 
     setSelectedTaskId(newTaskId);
     setSelectedTaskHierarchy(fullNewHierarchy);
     setActiveColumns(fullNewHierarchy);
+    console.log('[Board.tsx] handleTaskAdded - Called setSelectedTaskId, setSelectedTaskHierarchy, setActiveColumns');
+
+    // 呼び出し直後のストアの状態を確認 (オプション)
+    // setTimeout(() => {
+    //   const latestColumns = useTaskStore.getState().columns;
+    //   console.log('[Board.tsx] handleTaskAdded - Columns in store AFTER async update (length):', latestColumns.length, JSON.parse(JSON.stringify(latestColumns)));
+    // }, 0);
   };
 
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
